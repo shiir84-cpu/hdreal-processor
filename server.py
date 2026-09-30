@@ -1,8 +1,8 @@
 import os
-import base64
 import io
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import MCPServer, Image
+from mcp.types import ImageContent
 from openai import OpenAI
 
 mcp = MCPServer(
@@ -19,21 +19,17 @@ HDREAL_PROMPT = """HDreal — mantener exactamente la foto original, no modifica
 
 @mcp.tool()
 def hdreal_process_image(
-    image_base64: str,
+    image: ImageContent,
     format: str = "9:16"
-) -> str:
+) -> Image:
     """
-    Procesa una fotografía mediante HDREAL.
+    Procesa una imagen mediante HDREAL.
 
-    Formatos:
-    - 4:5 para carruseles y publicaciones
-    - 9:16 para reels e historias
-    - 1:1 para publicaciones cuadradas
-
-    La instrucción HDREAL es fija y no debe modificarse.
+    El formato se recibe por separado.
+    La instrucción HDREAL permanece fija.
     """
 
-    image_bytes = base64.b64decode(image_base64)
+    image_bytes = __import__("base64").b64decode(image.data)
 
     result = client.images.edit(
         model="gpt-image-2",
@@ -42,8 +38,12 @@ def hdreal_process_image(
     )
 
     output_base64 = result.data[0].b64_json
+    output_bytes = __import__("base64").b64decode(output_base64)
 
-    return output_base64
+    return Image(
+        data=output_bytes,
+        format="png"
+    )
 
 
 if __name__ == "__main__":
