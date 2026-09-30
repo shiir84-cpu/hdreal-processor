@@ -1,12 +1,14 @@
 import os
-import io
 import base64
+import io
 
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import Response
+from mcp.server.mcpserver import MCPServer
 from openai import OpenAI
 
-app = FastAPI(title="HDREAL Processor")
+mcp = MCPServer(
+    "HDREAL",
+    instructions="Procesador de imágenes HDREAL para fotografías de Cambá."
+)
 
 client = OpenAI(
     api_key=os.environ["OPENAI_API_KEY"]
@@ -15,21 +17,23 @@ client = OpenAI(
 HDREAL_PROMPT = """HDreal — mantener exactamente la foto original, no modificar ni reinterpretar ningún objeto, mueble, textura, color, vetas ni proporciones. Solo aumentar definición y calidad de imagen y extender el lienzo para adaptar a formato 9:16, rellenando únicamente las zonas fuera de la foto original. Sin zoom, sin recorte y sin alterar la imagen original. Fotografía realista, natural, sin apariencia de IA."""
 
 
-@app.get("/")
-def home():
-    return {
-        "status": "online",
-        "service": "HDREAL Processor"
-    }
+@mcp.tool()
+def hdreal_process_image(
+    image_base64: str,
+    format: str = "9:16"
+) -> str:
+    """
+    Procesa una fotografía mediante HDREAL.
 
+    Formatos:
+    - 4:5 para carruseles y publicaciones
+    - 9:16 para reels e historias
+    - 1:1 para publicaciones cuadradas
 
-@app.post("/process")
-async def process_image(
-    image: UploadFile = File(...),
-    format: str = Form("9:16")
-):
+    La instrucción HDREAL es fija y no debe modificarse.
+    """
 
-    image_bytes = await image.read()
+    image_bytes = base64.b64decode(image_base64)
 
     result = client.images.edit(
         model="gpt-image-2",
@@ -37,10 +41,14 @@ async def process_image(
         prompt=HDREAL_PROMPT
     )
 
-    image_base64 = result.data[0].b64_json
-    output = base64.b64decode(image_base64)
+    output_base64 = result.data[0].b64_json
 
-    return Response(
-        content=output,
-        media_type="image/png"
+    return output_base64
+
+
+if __name__ == "__main__":
+    mcp.run(
+        transport="streamable-http",
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", "8000"))
     )
